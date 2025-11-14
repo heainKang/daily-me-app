@@ -113,7 +113,7 @@ const InitialMBTIScreen: React.FC<Props> = ({ navigation }) => {
   const handleSkip = () => {
     Alert.alert(
       'MBTI 설정 건너뛰기',
-      '나중에 질문 답변을 통해 MBTI를 추정할 수 있습니다. 계속하시겠어요?',
+      '나중에 언제든지 MBTI를 설정할 수 있습니다. 계속하시겠어요?',
       [
         { text: '취소', style: 'cancel' },
         {
@@ -121,7 +121,8 @@ const InitialMBTIScreen: React.FC<Props> = ({ navigation }) => {
           onPress: async () => {
             try {
               const profile = await getUserProfile();
-              profile.isBaseMBTISet = true; // 건너뛰기로 설정
+              profile.baseMBTI = 'UNSET'; // 미설정 상태로 표시
+              profile.isBaseMBTISet = true;
               await saveUserProfile(profile);
               navigation.replace('Home');
             } catch (error) {
@@ -173,7 +174,7 @@ const InitialMBTIScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.optionsContainer}>
           <TouchableOpacity
             style={[
-              styles.optionButton, 
+              styles.optionButton,
               styles.optionA,
               isLoading && styles.optionButtonDisabled
             ]}
@@ -190,7 +191,7 @@ const InitialMBTIScreen: React.FC<Props> = ({ navigation }) => {
 
           <TouchableOpacity
             style={[
-              styles.optionButton, 
+              styles.optionButton,
               styles.optionB,
               isLoading && styles.optionButtonDisabled
             ]}
@@ -284,6 +285,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   optionsContainer: {
+    
     paddingVertical: 20,
   },
   optionButton: {

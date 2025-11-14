@@ -164,9 +164,8 @@ const DailyReportScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const handleViewQuotes = () => {
-    // TODO: 명언 화면으로 이동
-    // navigation.navigate('Quotes');
-    alert('준비중: 명언 화면을 준비 중입니다.');
+    // ✨ 오늘의 명언 화면으로 이동
+    navigation.navigate('QuoteOfTheDay');
   };
 
   const handleGoHome = () => {
@@ -250,6 +249,7 @@ const DailyReportScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* 하단 여백 */}
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
     </SafeAreaView>
   );
 };

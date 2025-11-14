@@ -53,15 +53,21 @@ const QuestionScreen: React.FC<Props> = ({ navigation, route }) => {
 
       await saveResponse(response);
 
+      // 🌟 "오늘의 명언"에서 온 경우 - 바로 돌아가기
+      if (route.params.from === 'QuoteOfTheDay') {
+        navigation.goBack();
+        return;
+      }
+
       // 오늘의 모든 응답 확인
       const todayResponses = await getTodayResponses();
-      
+
       // 3개 질문을 모두 완료했는지 확인
       if (todayResponses.length === 3) {
         // 일일 분석 수행
         const profile = await getUserProfile();
         const today = new Date().toISOString().split('T')[0];
-        
+
         const analysis = performDailyAnalysis(
           today,
           todayResponses,

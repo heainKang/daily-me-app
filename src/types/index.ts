@@ -67,6 +67,7 @@ export interface UserProfile {
   isBaseMBTISet: boolean;        // ✅ 기본 MBTI가 설정되었는지 확인 플래그
   createdAt: Date;               // 📅 프로필이 생성된 날짜
   totalResponses: number;        // 🔢 지금까지 답변한 총 질문 수
+  notificationsEnabled: boolean; // 🔔 알림 활성화 여부
 }
 
 // 💾 저장소 관련 타입들

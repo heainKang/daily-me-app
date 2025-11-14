@@ -13,6 +13,7 @@ const defaultUserProfile: UserProfile = {
   isBaseMBTISet: false,
   createdAt: new Date(),
   totalResponses: 0,
+  notificationsEnabled: true,
 };
 
 // 사용자 프로필 관리

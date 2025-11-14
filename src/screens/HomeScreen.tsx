@@ -1,30 +1,31 @@
 // 📱 HomeScreen.tsx - 메인 홈 화면 컴포넌트
 // 사용자가 일일 감정을 입력하고 즉시 분석을 시작하는 중심 화면
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,        // 📦 기본 컨테이너 컴포넌트
-  Text,        // 📝 텍스트 표시 컴포넌트  
+  Text,        // 📝 텍스트 표시 컴포넌트
   StyleSheet,  // 🎨 스타일 정의를 위한 객체
   TouchableOpacity, // 👆 터치 가능한 버튼 컴포넌트
   SafeAreaView,     // 📱 안전 영역(노치, 홈바 피함) 컴포넌트
   ScrollView,       // 📜 스크롤 가능한 컨테이너 컴포넌트
   TextInput,        // ⌨️ 텍스트 입력 컴포넌트
   Alert,            // 🚨 알림 다이얼로그 컴포넌트
-  Dimensions,       // 📏 화면 크기 정보 가져오는 API
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';  // 🗺️ 스택 네비게이션 타입
 import { useFocusEffect } from '@react-navigation/native';      // 🔄 화면 포커스 이벤트 훅
 import { RootStackParamList } from '../navigation/AppNavigator'; // 🗺️ 네비게이션 타입 정의
-import { 
+import {
   getUserProfile,     // 👤 사용자 프로필 가져오기
   getTodayResponses,  // 📅 오늘의 응답들 가져오기
   getDailyAnalysis,   // 📊 일일 분석 데이터 가져오기
   saveResponse,       // 💾 응답 저장하기
-  saveDailyAnalysis   // 💾 분석 결과 저장하기
+  saveDailyAnalysis,  // 💾 분석 결과 저장하기
+  saveUserProfile     // 👤 사용자 프로필 저장하기
 } from '../utils/storage';
 import { performDailyAnalysis } from '../utils/mbtiAnalysis'; // 🧠 MBTI 분석 로직
 import { UserProfile, DailyAnalysis, QuestionResponse } from '../types'; // 📋 타입 정의들
+import { scheduleQuoteNotifications, cancelAllNotifications } from '../utils/notificationUtils'; // 🔔 알림 관련 함수
 
 // 🗺️ 네비게이션 타입 정의 - Home 화면에서 사용할 네비게이션 프로퍼티
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
@@ -39,11 +40,11 @@ type EmotionType = 'great' | 'good' | 'normal' | 'sad' | 'tired';
 
 // 🎨 감정별 UI 데이터 배열 - 각 감정마다 이모지, 라벨, 색상을 정의
 const emotions = [
-  { id: 'great', emoji: '😊', label: '좋음', color: '#10b981' },     // 💚 행복 - 초록색 (에메랄드)
+  { id: 'great', emoji: '😊', label: '좋음', color: '#10b981' },      // 💚 행복 - 초록색 (에메랄드)
   { id: 'good', emoji: '🙂', label: '괜찮음', color: '#06b6d4' },    // 💙 좋음 - 파란색 (시안)
-  { id: 'normal', emoji: '😐', label: '평범', color: '#6b7280' },   // 🩶 평범 - 회색 (중성)
-  { id: 'sad', emoji: '😢', label: '우울', color: '#8b5cf6' },      // 💜 우울 - 보라색 (바이올렛)
-  { id: 'tired', emoji: '😴', label: '피곤', color: '#f59e0b' },    // 💛 피곤 - 주황색 (앰버)
+  { id: 'normal', emoji: '😐', label: '평범', color: '#6b7280' },    // 🩶 평범 - 회색 (중성)
+  { id: 'sad', emoji: '😢', label: '우울', color: '#8b5cf6' },       // 💜 우울 - 보라색 (바이올렛)
+  { id: 'tired', emoji: '😴', label: '피곤', color: '#f59e0b' },     // 💛 피곤 - 주황색 (앰버)
 ];
 
 // 🏠 메인 홈 화면 컴포넌트 - React Functional Component 
@@ -63,7 +64,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [emotionText, setEmotionText] = useState('');
   
   // ⏳ 로딩 상태 - 데이터를 불러오는 동안 로딩 UI 표시용
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading] = useState(false);
   
   // 📤 제출 중 상태 - 감정 데이터를 저장하고 분석하는 동안 버튼 비활성화용
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,43 +75,62 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // 🔄 화면 포커스 이펙트 - 사용자가 이 화면에 들어올 때마다 데이터 새로고침
   useFocusEffect(
     useCallback(() => {
-      loadData(); // 🔃 데이터 로딩 함수 호출
-    }, []) // 🔒 빈 의존성 배열 = 마운트시에만 실행
+      loadInitialData(); // 초기 데이터 로드 (캐시 우선)
+      loadLatestData();  // 백그라운드에서 최신 데이터 로드
+    }, [])
   );
 
-  // 📥 데이터 로딩 함수 - 화면에 필요한 모든 데이터를 비동기로 가져오는 함수
-  const loadData = async () => {
+  // 🚀 캐시된 데이터 우선 로드 (빠른 표시)
+  const loadInitialData = async () => {
     try {
-      setIsLoading(true); // ⏳ 로딩 시작
-      
-      // 👤 사용자 프로필 로드 - MBTI 정보와 기본 설정 가져오기
       const profile = await getUserProfile();
       setUserProfile(profile);
 
-      // 📅 오늘 날짜 문자열 생성 - YYYY-MM-DD 형식으로 변환
       const today = new Date().toISOString().split('T')[0];
-      
-      // 📊 오늘의 분석 결과 로드 - 이미 분석이 완료되었다면 가져오기
       const analysis = await getDailyAnalysis(today);
       setTodayAnalysis(analysis);
 
-      // ✅ 오늘 이미 감정을 기록했는지 확인 - 중복 입력 방지
       const responses = await getTodayResponses();
-      const hasEmotion = responses.some(r => r.emotionType); // 감정타입이 있는 응답 찾기
+      const hasEmotion = responses.some(r => r.emotionType);
       setHasSubmittedToday(hasEmotion);
 
-      // 🔄 이미 기록한 감정이 있다면 UI에 표시 - 사용자가 뭘 선택했는지 보여주기
       if (hasEmotion && responses.length > 0) {
-        const lastResponse = responses[responses.length - 1]; // 가장 최근 응답
-        setSelectedEmotion(lastResponse.emotionType || null);  // 선택한 감정 복원
-        setEmotionText(lastResponse.emotionText || '');        // 입력한 텍스트 복원
+        const lastResponse = responses[responses.length - 1];
+        setSelectedEmotion(lastResponse.emotionType || null);
+        setEmotionText(lastResponse.emotionText || '');
       }
-
     } catch (error) {
-      console.error('Error loading data:', error); // 🚨 에러 로깅
-      Alert.alert('오류', '데이터를 불러오는 중 오류가 발생했습니다.'); // 사용자에게 에러 알림
-    } finally {
-      setIsLoading(false); // ⏳ 로딩 종료 (성공/실패 무관하게)
+      console.error('Error loading initial data:', error);
+    }
+  };
+
+  // 📥 최신 데이터 백그라운드 로드 (조용히 업데이트)
+  const loadLatestData = async () => {
+    try {
+      // 약간의 지연을 두어 초기 렌더링 완료 후 업데이트
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const today = new Date().toISOString().split('T')[0];
+      const [profile, analysis, responses] = await Promise.all([
+        getUserProfile(),
+        getDailyAnalysis(today),
+        getTodayResponses()
+      ]);
+
+      // 변경사항이 있으면만 업데이트
+      setUserProfile(profile);
+      setTodayAnalysis(analysis);
+
+      const hasEmotion = responses.some(r => r.emotionType);
+      setHasSubmittedToday(hasEmotion);
+
+      if (hasEmotion && responses.length > 0) {
+        const lastResponse = responses[responses.length - 1];
+        setSelectedEmotion(lastResponse.emotionType || null);
+        setEmotionText(lastResponse.emotionText || '');
+      }
+    } catch (error) {
+      console.error('Error loading latest data:', error);
     }
   };
 
@@ -140,8 +160,18 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // 😊 메인 인사말 생성 함수 - 사용자의 MBTI 타입을 포함한 개인화된 인사말
   const getMainGreeting = () => {
     // 🧠 사용자 MBTI 가져오기 (없으면 빈 문자열)
-    const userName = userProfile?.baseMBTI ? `${userProfile.baseMBTI}` : '';
+    let userName = '';
+    if (userProfile?.baseMBTI === 'UNSET') {
+      userName = '미설정'; // 건너뛴 상태
+    } else if (userProfile?.baseMBTI) {
+      userName = userProfile.baseMBTI;
+    }
     return `안녕하세요${userName ? ', ' + userName + '님' : ''}! `; // MBTI 있으면 "안녕하세요, ENFP님!" 형태
+  };
+
+  // 🧠 MBTI 클릭 핸들러 - MBTI 재테스트 화면으로 이동
+  const handleMBTIPress = () => {
+    navigation.navigate('InitialMBTI');
   };
 
   // 👆 감정 선택 핸들러 함수 - 사용자가 감정 버튼을 눌렀을 때 실행
@@ -190,8 +220,12 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
       // 💾 분석 결과를 로컬 스토리지에 저장
       await saveDailyAnalysis(analysis);
-      setTodayAnalysis(analysis);     // 상태 업데이트로 UI에 반영
-      setHasSubmittedToday(true);     // 오늘 제출 완료 플래그 설정
+
+      // ✅ 상태 업데이트 (화면 갱신)
+      setTodayAnalysis(analysis);
+      setHasSubmittedToday(true);
+      setSelectedEmotion(null);
+      setEmotionText('');
 
       // 🎉 성공 알림 및 결과 화면 이동 옵션 제공
       Alert.alert(
@@ -226,10 +260,41 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     navigation.navigate('DailyReport', { date: today });  // 🗺️ 결과 화면으로 이동
   };
 
-  // 📅 히스토리 보기 핸들러 - 지난 감정 기록들을 볼 수 있는 화면 (준비 중)
+  // 📅 히스토리 보기 핸들러 - 지난 감정 기록들을 볼 수 있는 화면
   const handleViewHistory = () => {
-    // TODO: 히스토리 화면 구현 후 navigation.navigate('History') 로 변경
-    Alert.alert('준비중', '감정 히스토리 기능을 준비 중입니다.');
+    navigation.navigate('History');
+  };
+
+  // ✨ 오늘의 명언 보기 핸들러
+  const handleViewQuotes = () => {
+    navigation.navigate('QuoteOfTheDay');
+  };
+
+  // 🔔 알림 토글 핸들러
+  const handleToggleNotifications = async () => {
+    try {
+      if (!userProfile) return;
+
+      const newNotificationState = !userProfile.notificationsEnabled;
+
+      if (newNotificationState) {
+        // 알림 활성화
+        await scheduleQuoteNotifications();
+        Alert.alert('✅ 알림 활성화', '매일 아침 9시, 점심 12시, 저녁 6시에 명언을 받아볼 수 있습니다!');
+      } else {
+        // 알림 비활성화
+        await cancelAllNotifications();
+        Alert.alert('❌ 알림 비활성화', '명언 알림이 해제되었습니다.');
+      }
+
+      // 프로필 업데이트
+      const updatedProfile = { ...userProfile, notificationsEnabled: newNotificationState };
+      await saveUserProfile(updatedProfile);
+      setUserProfile(updatedProfile);
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+      Alert.alert('오류', '알림 설정을 변경할 수 없습니다.');
+    }
   };
 
   // ⏳ 로딩 중일 때 표시할 UI
@@ -259,7 +324,12 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         {/* 👋 헤더 영역 - 시간대별 인사말과 날짜 표시 */}
         <View style={styles.header}>
           <Text style={styles.timeGreeting}>{getTimeGreeting()}</Text>
-          <Text style={styles.mainGreeting}>{getMainGreeting()}</Text>
+
+          {/* 🧠 MBTI 클릭 가능 영역 */}
+          <TouchableOpacity onPress={handleMBTIPress}>
+            <Text style={styles.mainGreeting}>{getMainGreeting()}</Text>
+          </TouchableOpacity>
+
           <Text style={styles.date}>
             {new Date().toLocaleDateString('ko-KR', {
               year: 'numeric',
@@ -372,25 +442,58 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           </TouchableOpacity>
         )}
 
+        {/* 오늘의 명언 버튼 */}
+        <TouchableOpacity style={styles.quoteButton} onPress={handleViewQuotes}>
+          <Text style={styles.quoteButtonText}>✨ 오늘의 명언 보기</Text>
+        </TouchableOpacity>
+
         {/* 히스토리 버튼 */}
         <TouchableOpacity style={styles.historyButton} onPress={handleViewHistory}>
           <Text style={styles.historyButtonText}>📅 지난 감정 보기</Text>
         </TouchableOpacity>
 
+        {/* 알림 설정 */}
+        {userProfile && (
+          <TouchableOpacity style={styles.settingsCard} onPress={handleToggleNotifications}>
+            <View style={styles.settingsContent}>
+              <Text style={styles.settingsLabel}>🔔 명언 알림</Text>
+              <Text style={styles.settingsValue}>
+                {userProfile.notificationsEnabled ? '활성화됨' : '비활성화됨'}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.toggle,
+                { backgroundColor: userProfile.notificationsEnabled ? '#10b981' : '#cbd5e1' },
+              ]}
+            >
+              <View
+                style={[
+                  styles.toggleCircle,
+                  {
+                    transform: [
+                      { translateX: userProfile.notificationsEnabled ? 20 : 0 },
+                    ],
+                  },
+                ]}
+              />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* 하단 여백 */}
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
     </SafeAreaView>
   );
 };
 
-const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
-    minHeight: '100vh',    // 웹에서 전체 화면 높이 보장
   },
   content: {
     paddingHorizontal: 20,
@@ -445,11 +548,14 @@ const styles = StyleSheet.create({
   emotionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
+    gap: 12,
     marginBottom: 24,
   },
   emotionButton: {
-    width: (width - 120) / 3,
+    flex: 1,
+    minWidth: 80,
+    maxWidth: 120,
     aspectRatio: 1,
     backgroundColor: '#f8fafc',
     borderRadius: 16,
@@ -565,6 +671,20 @@ const styles = StyleSheet.create({
     color: '#c7d2fe',
     lineHeight: 20,
   },
+  quoteButton: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  quoteButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#d97706',
+  },
   historyButton: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -578,6 +698,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#6366f1',
+  },
+  settingsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 16,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settingsContent: {
+    flex: 1,
+  },
+  settingsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  settingsValue: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    padding: 2,
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  toggleCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    boxShadow: '0 2px 3px rgba(0, 0, 0, 0.2)',
+    elevation: 3,
   },
   bottomSpacing: {
     height: 80,  // 하단 여백을 두 배로 증가 (작은 화면에서 스크롤 여유 공간 확보)

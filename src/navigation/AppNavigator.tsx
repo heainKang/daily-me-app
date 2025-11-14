@@ -13,6 +13,8 @@ import InitialMBTIScreen from '../screens/InitialMBTIScreen';   // 🧠 MBTI 설
 import HomeScreen from '../screens/HomeScreen';                 // 🏠 메인 홈 화면
 import QuestionScreen from '../screens/QuestionScreen';         // ❓ 질문 화면
 import DailyReportScreen from '../screens/DailyReportScreen';   // 📊 일일 리포트 화면
+import HistoryScreen from '../screens/HistoryScreen';           // 📅 감정 히스토리 화면
+import QuoteOfTheDayScreen from '../screens/QuoteOfTheDayScreen'; // ✨ 오늘의 명언 화면
 
 // 🗂️ TypeScript 타입 정의: 각 화면에 전달할 수 있는 데이터 형태를 정의
 export type RootStackParamList = {
@@ -22,10 +24,13 @@ export type RootStackParamList = {
   Question: {                // 질문 화면 - 아래 데이터들을 전달해야 함
     questionId: string;      // 질문 ID
     timeSlot: 'morning' | 'afternoon' | 'evening'; // 시간대 (아침/점심/저녁)
+    from?: 'QuoteOfTheDay';  // 어디서 온 화면인지 (옵션)
   };
   DailyReport: {             // 일일 리포트 화면 - 아래 데이터를 전달해야 함
     date: string;            // 날짜 정보
   };
+  History: undefined;        // 감정 히스토리 화면 - 데이터 전달 안함
+  QuoteOfTheDay: undefined;  // 오늘의 명언 화면 - 데이터 전달 안함
 };
 
 // 📚 스택 네비게이터 생성 (화면을 책처럼 쌓아서 관리)
@@ -80,10 +85,24 @@ const AppNavigator = () => {
         />
         
         {/* 📊 일일 리포트 화면 */}
-        <Stack.Screen 
-          name="DailyReport" 
+        <Stack.Screen
+          name="DailyReport"
           component={DailyReportScreen}
           options={{ title: '일일 리포트' }}
+        />
+
+        {/* 📅 감정 히스토리 화면 */}
+        <Stack.Screen
+          name="History"
+          component={HistoryScreen}
+          options={{ title: '감정 히스토리' }}
+        />
+
+        {/* ✨ 오늘의 명언 화면 */}
+        <Stack.Screen
+          name="QuoteOfTheDay"
+          component={QuoteOfTheDayScreen}
+          options={{ title: '오늘의 명언' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
